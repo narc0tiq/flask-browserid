@@ -13,8 +13,9 @@ except ImportError:
 
 class BrowserID(object):
     def __init__(self, app=None):
-        self.views = flask.Blueprint('browserid', __name__, static_folder="static")
+        self.views = flask.Blueprint('browserid', __name__, template_folder='templates')
 
+        self.auth_script = None
         self.login_callback = None
         self.logout_callback = None
 
@@ -24,6 +25,7 @@ class BrowserID(object):
     def init_app(self, app):
         self.login_url = app.config.get('BROWSERID_LOGIN_URL', '/api/login')
         self.logout_url = app.config.get('BROWSERID_LOGOUT_URL', '/api/logout')
+        self.js_url = app.config.get('BROWSERID_JS_URL', '/api/browserid.js')
         self.client_domain = app.config.get('BROWSERID_CLIENT_DOMAIN', None)
 
         if not self.login_callback:
@@ -31,16 +33,6 @@ class BrowserID(object):
                 self.user_loader = app.config['BROWSERID_LOGIN_CALLBACK']
             else:
                 raise Exception("No method for finding users. a `login_callback` method is required.")
-
-        with self.views.open_resource('static/auth.js') as f:
-            self.auth_script = jinja2.Template(
-                                        f.read(),
-                                        autoescape=False
-                                    ).render(
-                                        login_url=self.login_url,
-                                        logout_url=self.logout_url
-                                    )
-            self.views.app_context_processor(self.load_auth_script)
 
         self.views.add_url_rule(self.login_url,
                                 'login',
@@ -50,6 +42,10 @@ class BrowserID(object):
                                 'logout',
                                 self._logout,
                                 methods=['POST'])
+        self.views.add_url_rule(self.js_url,
+                                'js',
+                                self._js,
+                                methods=['GET'])
 
         app.register_blueprint(self.views)
         app.browserid = self
@@ -66,9 +62,6 @@ class BrowserID(object):
         An optional function that runs after the user has logged out.
         """
         self.logout_callback = func
-
-    def load_auth_script(self):
-        return dict(auth_script=self.auth_script)
 
     def get_client_origin(self):
         if self.client_domain:
@@ -100,3 +93,7 @@ class BrowserID(object):
             self.logout_callback()
         logout_user()
         return ''
+
+    def _js(self):
+        text = flask.render_template('browserid/auth.js')
+        return flask.Response(text, mimetype='text/javascript')
