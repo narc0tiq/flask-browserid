@@ -21,7 +21,7 @@ $(function() {
   logoutCallback = function(event) {
     $.ajax({
       type: 'POST',
-      url: '{{ url_for("browserid.login") }}',
+      url: '{{ url_for("browserid.logout") }}',
       success: function() {
         return location.reload(true);
       },
